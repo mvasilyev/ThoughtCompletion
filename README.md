@@ -1,5 +1,10 @@
 # ThoughtCompletion
 
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.ru.md">Русский</a>
+</p>
+
+
 AI-powered thought organization assistant for VS Code. Helps structure documents like negotiation plans, brainstorms, project evaluations, and more.
 
 ## Features
