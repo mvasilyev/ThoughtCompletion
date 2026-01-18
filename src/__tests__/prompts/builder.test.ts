@@ -20,7 +20,7 @@ describe('buildPrompt', () => {
     it('should build content prompt for content cursor position', () => {
         const { systemPrompt, userPrompt } = buildPrompt(baseContext);
 
-        expect(systemPrompt).toContain('writing assistant');
+        expect(systemPrompt).toContain('Thought Coach');
         expect(userPrompt).toContain('Test Section');
         expect(userPrompt).toContain('Some text before');
     });
@@ -33,7 +33,7 @@ describe('buildPrompt', () => {
 
         const { systemPrompt, userPrompt } = buildPrompt(structureContext);
 
-        expect(systemPrompt).toContain('structuring assistant');
+        expect(systemPrompt).toContain('Strategic Document Architect');
     });
 
     it('should include document type info when available', () => {
@@ -67,7 +67,7 @@ describe('buildPromptForMode', () => {
 
     it('should force structure mode regardless of cursor position', () => {
         const { systemPrompt } = buildPromptForMode(baseContext, 'structure');
-        expect(systemPrompt).toContain('structuring assistant');
+        expect(systemPrompt).toContain('Strategic Document Architect');
     });
 
     it('should force content mode regardless of cursor position', () => {
@@ -77,6 +77,6 @@ describe('buildPromptForMode', () => {
         };
 
         const { systemPrompt } = buildPromptForMode(structureContext, 'content');
-        expect(systemPrompt).toContain('writing assistant');
+        expect(systemPrompt).toContain('Thought Coach');
     });
 });

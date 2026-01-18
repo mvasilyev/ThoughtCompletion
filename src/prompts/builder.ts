@@ -36,15 +36,23 @@ function buildStructurePrompt(context: DocumentContext): BuiltPrompt {
         })
         .join('\n');
 
-    const userPrompt = `${typeContext}${sectionContext}
+    const userPrompt = `CONTEXT & FRAMEWORK:
+${typeContext}${sectionContext}
 
-Recent document structure:
+RECENT STRUCTURE:
 ${structureSummary}
 
-Current content before cursor (DO NOT REPEAT THIS):
+CONTENT BEFORE CURSOR (DO NOT REPEAT):
 ${context.textBeforeCursor}
 
-Generate ONLY the new structural elements to add. Do not repeat any existing text.`;
+INSTRUCTIONS:
+1. Analyze the logic flow above.
+2. Suggest the MAJOR structural elements (headers/bullets) that should come next.
+3. Use the framework specified directly above (e.g., SWOT, Negotiations).
+4. DO NOT write content. DO NOT repeat existing text.
+5. If the argument is weak, suggest a header like "### Critical Gaps" or "### Evidence Required".
+
+Generate ONLY the new structure.`;
 
     return {
         systemPrompt: STRUCTURE_SYSTEM_PROMPT,
@@ -64,17 +72,26 @@ function buildContentPrompt(context: DocumentContext): BuiltPrompt {
         ? `\nCurrent section: ${context.currentSection}`
         : '';
 
-    const userPrompt = `${typeContext}${sectionContext}
+    const userPrompt = `CONTEXT & FRAMEWORK:
+${typeContext}${sectionContext}
 
-Content before cursor (DO NOT REPEAT THIS):
+CONTENT BEFORE CURSOR (DO NOT REPEAT):
 ${context.textBeforeCursor}
 
-Current line: ${context.currentLine}
+CURRENT LINE:
+${context.currentLine}
 
-Content after cursor:
+CONTENT AFTER CURSOR:
 ${context.textAfterCursor}
 
-Generate ONLY the new text to insert at the cursor. Do not repeat any existing text. Continue or complete the current point naturally.`;
+INSTRUCTIONS:
+1. You are coaching the user to write this section.
+2. Provide *leading sentences* that force specific logic (e.g., "The root cause of this is...").
+3. Insert *probing questions* as comments (e.g., "<!-- Is this assumption valid? -->").
+4. DO NOT simply autocomplete generic text.
+5. DO NOT repeat existing text.
+
+Generate ONLY the new text/scaffolding.`;
 
     return {
         systemPrompt: CONTENT_SYSTEM_PROMPT,
