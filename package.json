@@ -1,0 +1,193 @@
+{
+  "name": "thought-completion",
+  "displayName": "ThoughtCompletion",
+  "description": "AI-powered thought organization assistant for documents - helps structure negotiation plans, brainstorms, evaluations, and more",
+  "version": "0.1.0",
+  "publisher": "thought-completion",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "llm",
+    "document",
+    "structure",
+    "completion",
+    "ollama",
+    "thought"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onLanguage:plaintext"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "thoughtCompletion.continueStructure",
+        "title": "ThoughtCompletion: Continue Structure"
+      },
+      {
+        "command": "thoughtCompletion.fillBlank",
+        "title": "ThoughtCompletion: Fill Blank"
+      },
+      {
+        "command": "thoughtCompletion.detectType",
+        "title": "ThoughtCompletion: Detect Document Type"
+      },
+      {
+        "command": "thoughtCompletion.selectType",
+        "title": "ThoughtCompletion: Select Document Type"
+      },
+      {
+        "command": "thoughtCompletion.trigger",
+        "title": "ThoughtCompletion: Trigger Completion"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "thoughtCompletion.trigger",
+        "key": "cmd+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && (editorLangId == 'markdown' || editorLangId == 'plaintext')"
+      },
+      {
+        "command": "thoughtCompletion.continueStructure",
+        "key": "cmd+shift+]",
+        "mac": "cmd+shift+]",
+        "when": "editorTextFocus && (editorLangId == 'markdown' || editorLangId == 'plaintext')"
+      },
+      {
+        "command": "thoughtCompletion.fillBlank",
+        "key": "cmd+shift+[",
+        "mac": "cmd+shift+[",
+        "when": "editorTextFocus && (editorLangId == 'markdown' || editorLangId == 'plaintext')"
+      }
+    ],
+    "configuration": {
+      "title": "ThoughtCompletion",
+      "properties": {
+        "thoughtCompletion.provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "ollama"
+          ],
+          "default": "ollama",
+          "description": "LLM provider to use"
+        },
+        "thoughtCompletion.openai.baseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL for OpenAI-compatible API"
+        },
+        "thoughtCompletion.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for OpenAI-compatible API"
+        },
+        "thoughtCompletion.openai.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "Model to use with OpenAI-compatible API"
+        },
+        "thoughtCompletion.ollama.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Base URL for Ollama API"
+        },
+        "thoughtCompletion.ollama.model": {
+          "type": "string",
+          "default": "llama3.2",
+          "description": "Model to use with Ollama"
+        },
+        "thoughtCompletion.autoComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic inline completions (when triggerMode is 'auto')"
+        },
+        "thoughtCompletion.triggerMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "default": "auto",
+          "description": "Trigger mode: 'auto' triggers after delay, 'manual' only on command"
+        },
+        "thoughtCompletion.completionDelay": {
+          "type": "number",
+          "default": 2500,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Delay in milliseconds before triggering completion (500-10000ms)"
+        },
+        "thoughtCompletion.maxTokens": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000,
+          "description": "Maximum tokens for LLM response (increase for thinking models like Qwen3)"
+        },
+        "thoughtCompletion.activeDocumentType": {
+          "type": "string",
+          "default": "auto",
+          "description": "Active document type ('auto' for LLM detection, or a specific type name)"
+        },
+        "thoughtCompletion.documentTypes": {
+          "type": "array",
+          "default": [],
+          "description": "Custom document types",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique name for this document type"
+              },
+              "detectionPrompt": {
+                "type": "string",
+                "description": "Prompt describing how to identify this document type"
+              },
+              "workingPrompt": {
+                "type": "string",
+                "description": "Prompt describing how to assist with this document type"
+              }
+            },
+            "required": [
+              "name",
+              "detectionPrompt",
+              "workingPrompt"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "undici": "^7.18.2"
+  }
+}

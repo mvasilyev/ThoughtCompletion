@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+
+# TypeScript
+*.tsbuildinfo
+
+# VSIX packages
+*.vsix
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Debug
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Environment
+.env
+.env.local
+
+# Test files
+test-provider.ts
