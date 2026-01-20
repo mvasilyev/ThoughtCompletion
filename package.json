@@ -4,6 +4,11 @@
   "description": "AI-powered thought organization assistant for documents - helps structure negotiation plans, brainstorms, evaluations, and more",
   "version": "0.1.0",
   "publisher": "thought-completion",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mvasilyev/ThoughtCompletion.git"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -170,6 +175,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
+    "package": "npx @vscode/vsce package",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
