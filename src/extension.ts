@@ -54,6 +54,7 @@ function getCommandContext(): CommandContext {
         customTypes: settings.documentTypes,
         activeTypeName: settings.activeDocumentType,
         maxTokens: settings.maxTokens,
+        provider: provider!,
     };
 }
 
