@@ -25,6 +25,7 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
     private maxTokens: number;
     private cachedType: DocumentType | null = null;
     private cachedDocVersion: number = -1;
+    private forcedMode: 'structure' | 'content' | null = null;
 
     constructor(
         llm: LLMProvider,
@@ -62,6 +63,14 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
         // Reset cache when config changes
         this.cachedType = null;
         this.cachedDocVersion = -1;
+    }
+
+    /**
+     * Force a specific completion mode for the next completion request
+     * This is used by manual commands to override the auto-detected mode
+     */
+    setForcedMode(mode: 'structure' | 'content' | null): void {
+        this.forcedMode = mode;
     }
 
     async provideInlineCompletionItems(
@@ -126,8 +135,20 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
                 docType
             );
 
-            // Build prompt
-            const { systemPrompt, userPrompt } = buildPrompt(docContext);
+            // Build prompt using forced mode if set, otherwise use detected mode
+            let systemPrompt: string;
+            let userPrompt: string;
+            
+            if (this.forcedMode) {
+                const { buildPromptForMode } = await import('../prompts/builder');
+                ({ systemPrompt, userPrompt } = buildPromptForMode(docContext, this.forcedMode));
+                console.log('[ThoughtCompletion] Using forced mode:', this.forcedMode);
+                // Clear forced mode after using it
+                this.forcedMode = null;
+            } else {
+                ({ systemPrompt, userPrompt } = buildPrompt(docContext));
+            }
+            
             console.log('[ThoughtCompletion] Built prompt, calling LLM...');
             console.log('[ThoughtCompletion] Cursor position:', docContext.cursorPosition);
             console.log('[ThoughtCompletion] Max tokens:', this.maxTokens);
