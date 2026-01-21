@@ -16,18 +16,6 @@ export interface CommandContext {
 }
 
 /**
- * Insert completion at cursor position (for backwards compatibility)
- */
-async function insertCompletion(
-    editor: vscode.TextEditor,
-    completion: string
-): Promise<void> {
-    await editor.edit(editBuilder => {
-        editBuilder.insert(editor.selection.active, completion);
-    });
-}
-
-/**
  * Trigger inline suggestion at cursor position
  * This shows the suggestion as grayed-out text that can be accepted or dismissed
  */

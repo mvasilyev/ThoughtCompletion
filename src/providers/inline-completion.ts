@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import { LLMProvider, DocumentType } from '../llm/types';
 import { analyzeDocument } from '../analysis/document-context';
-import { buildPrompt } from '../prompts/builder';
+import { buildPrompt, buildPromptForMode } from '../prompts/builder';
 import { resolveDocumentType } from '../prompts/type-detector';
 
 /**
@@ -140,7 +140,6 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
             let userPrompt: string;
             
             if (this.forcedMode) {
-                const { buildPromptForMode } = await import('../prompts/builder');
                 ({ systemPrompt, userPrompt } = buildPromptForMode(docContext, this.forcedMode));
                 console.log('[ThoughtCompletion] Using forced mode:', this.forcedMode);
                 // Clear forced mode after using it
