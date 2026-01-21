@@ -87,8 +87,8 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
             return null;
         }
 
-        // In manual mode, only respond to explicit invocations (Ctrl+Space)
-        if (this.triggerMode === 'manual') {
+        // In manual mode, only respond to explicit invocations (Ctrl+Space) or forced mode
+        if (this.triggerMode === 'manual' && !this.forcedMode) {
             if (context.triggerKind === vscode.InlineCompletionTriggerKind.Automatic) {
                 console.log('[ThoughtCompletion] Manual mode - ignoring automatic trigger');
                 return null;
@@ -142,7 +142,7 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
             if (this.forcedMode) {
                 ({ systemPrompt, userPrompt } = buildPromptForMode(docContext, this.forcedMode));
                 console.log('[ThoughtCompletion] Using forced mode:', this.forcedMode);
-                // Clear forced mode after using it
+                // Clear forced mode after using it once
                 this.forcedMode = null;
             } else {
                 ({ systemPrompt, userPrompt } = buildPrompt(docContext));
@@ -159,15 +159,18 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
                 temperature: 0.7,
             });
 
-            console.log('[ThoughtCompletion] LLM response:', completion?.slice(0, 100));
+            console.log('[ThoughtCompletion] LLM response length:', completion?.length);
+            console.log('[ThoughtCompletion] LLM response lines:', completion?.split('\n').length);
+            console.log('[ThoughtCompletion] LLM response preview:', completion?.slice(0, 200));
 
             if (token.isCancellationRequested || !completion) {
                 return null;
             }
 
             // Create inline completion item
+            // Use SnippetString for better multi-line support
             const item = new vscode.InlineCompletionItem(
-                completion,
+                new vscode.SnippetString(completion),
                 new vscode.Range(position, position)
             );
 
