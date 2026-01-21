@@ -168,9 +168,11 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
             }
 
             // Create inline completion item
-            // Use SnippetString for better multi-line support
+            // Use SnippetString with appendText to avoid interpreting snippet syntax
+            const snippetString = new vscode.SnippetString();
+            snippetString.appendText(completion);
             const item = new vscode.InlineCompletionItem(
-                new vscode.SnippetString(completion),
+                snippetString,
                 new vscode.Range(position, position)
             );
 
