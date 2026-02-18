@@ -1,13 +1,10 @@
-/**
- * Extension commands
- */
-
 import * as vscode from 'vscode';
 import { LLMProvider, DocumentType } from '../llm/types';
-import { analyzeDocument } from '../analysis/document-context';
-import { buildPromptForMode } from '../prompts/builder';
 import { resolveDocumentType, getAllDocumentTypes } from '../prompts';
-import { getSettings, updateSetting } from '../config/settings';
+import { buildPrompt, buildPromptForMode } from '../prompts/builder';
+import { analyzeDocument } from '../analysis/document-context';
+import { updateSetting } from '../config/settings';
+import { ThoughtCompletionProvider } from '../providers';
 
 /**
  * Command context passed to command functions
@@ -17,136 +14,105 @@ export interface CommandContext {
     customTypes: DocumentType[];
     activeTypeName: string;
     maxTokens: number;
+    provider: ThoughtCompletionProvider;
 }
 
 /**
- * Insert completion at cursor position
+ * Trigger inline suggestion at cursor position
+ * This shows the suggestion as grayed-out text that can be accepted or dismissed
  */
-async function insertCompletion(
-    editor: vscode.TextEditor,
-    completion: string
+async function triggerInlineSuggestion(): Promise<void> {
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+}
+
+/**
+ * Pre-fetch a completion from the LLM with a progress notification,
+ * cache it on the provider, then trigger inline suggest.
+ */
+async function prefetchAndTrigger(
+    ctx: CommandContext,
+    mode: 'structure' | 'content' | null,
+    progressMessage: string
 ): Promise<void> {
-    await editor.edit(editBuilder => {
-        editBuilder.insert(editor.selection.active, completion);
-    });
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        vscode.window.showWarningMessage('No active editor');
+        return;
+    }
+
+    try {
+        const completion = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'ThoughtCompletion',
+                cancellable: true,
+            },
+            async (progress, token) => {
+                progress.report({ message: progressMessage });
+
+                const document = editor.document;
+                const position = editor.selection.active;
+                const text = document.getText();
+
+                // Resolve document type
+                const docType = await resolveDocumentType(
+                    text,
+                    ctx.activeTypeName,
+                    ctx.customTypes,
+                    ctx.llm
+                );
+
+                if (token.isCancellationRequested) { return null; }
+
+                // Analyze document context
+                const docContext = analyzeDocument(
+                    text,
+                    position.line,
+                    position.character,
+                    docType
+                );
+
+                // Build prompt
+                const { systemPrompt, userPrompt } = mode
+                    ? buildPromptForMode(docContext, mode)
+                    : buildPrompt(docContext);
+
+                if (token.isCancellationRequested) { return null; }
+
+                // Call LLM
+                return ctx.llm.complete(userPrompt, {
+                    systemPrompt,
+                    maxTokens: ctx.maxTokens,
+                    temperature: 0.7,
+                });
+            }
+        );
+
+        if (completion) {
+            ctx.provider.setCachedCompletion(completion);
+            // Also set forced mode as fallback
+            if (mode) {
+                ctx.provider.setForcedMode(mode);
+            }
+            await triggerInlineSuggestion();
+        }
+    } catch (error) {
+        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
+    }
 }
 
 /**
  * Continue Structure command - forces structure completion mode
  */
 export async function continueStructureCommand(ctx: CommandContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    try {
-        const text = editor.document.getText();
-        const position = editor.selection.active;
-
-        // Resolve document type
-        const docType = await resolveDocumentType(
-            text,
-            ctx.activeTypeName,
-            ctx.customTypes,
-            ctx.llm
-        );
-
-        // Analyze context
-        const docContext = analyzeDocument(
-            text,
-            position.line,
-            position.character,
-            docType
-        );
-
-        // Build structure prompt
-        const { systemPrompt, userPrompt } = buildPromptForMode(docContext, 'structure');
-
-        // Show progress
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: 'ThoughtCompletion',
-                cancellable: true,
-            },
-            async (progress, token) => {
-                progress.report({ message: 'Generating structure...' });
-
-                const completion = await ctx.llm.complete(userPrompt, {
-                    systemPrompt,
-                    maxTokens: ctx.maxTokens,
-                    temperature: 0.7,
-                });
-
-                if (!token.isCancellationRequested && completion) {
-                    await insertCompletion(editor, completion);
-                }
-            }
-        );
-    } catch (error) {
-        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
-    }
+    await prefetchAndTrigger(ctx, 'structure', 'Generating structure completion...');
 }
 
 /**
  * Fill Blank command - forces content filling mode
  */
 export async function fillBlankCommand(ctx: CommandContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    try {
-        const text = editor.document.getText();
-        const position = editor.selection.active;
-
-        // Resolve document type
-        const docType = await resolveDocumentType(
-            text,
-            ctx.activeTypeName,
-            ctx.customTypes,
-            ctx.llm
-        );
-
-        // Analyze context
-        const docContext = analyzeDocument(
-            text,
-            position.line,
-            position.character,
-            docType
-        );
-
-        // Build content prompt
-        const { systemPrompt, userPrompt } = buildPromptForMode(docContext, 'content');
-
-        // Show progress
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: 'ThoughtCompletion',
-                cancellable: true,
-            },
-            async (progress, token) => {
-                progress.report({ message: 'Generating content...' });
-
-                const completion = await ctx.llm.complete(userPrompt, {
-                    systemPrompt,
-                    maxTokens: ctx.maxTokens,
-                    temperature: 0.7,
-                });
-
-                if (!token.isCancellationRequested && completion) {
-                    await insertCompletion(editor, completion);
-                }
-            }
-        );
-    } catch (error) {
-        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
-    }
+    await prefetchAndTrigger(ctx, 'content', 'Generating content completion...');
 }
 
 /**
@@ -221,61 +187,7 @@ export async function selectTypeCommand(ctx: CommandContext): Promise<void> {
  * Trigger Completion command - auto-detects mode based on cursor position
  */
 export async function triggerCommand(ctx: CommandContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    try {
-        const text = editor.document.getText();
-        const position = editor.selection.active;
-
-        // Resolve document type
-        const docType = await resolveDocumentType(
-            text,
-            ctx.activeTypeName,
-            ctx.customTypes,
-            ctx.llm
-        );
-
-        // Analyze context - this determines if we're at structure or content position
-        const docContext = analyzeDocument(
-            text,
-            position.line,
-            position.character,
-            docType
-        );
-
-        // Use detected cursor position to choose mode
-        const mode = docContext.cursorPosition;
-        const { buildPrompt } = await import('../prompts/builder');
-        const { systemPrompt, userPrompt } = buildPrompt(docContext);
-
-        // Show progress
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: 'ThoughtCompletion',
-                cancellable: true,
-            },
-            async (progress, token) => {
-                progress.report({ message: `Generating ${mode}...` });
-
-                const completion = await ctx.llm.complete(userPrompt, {
-                    systemPrompt,
-                    maxTokens: ctx.maxTokens,
-                    temperature: 0.7,
-                });
-
-                if (!token.isCancellationRequested && completion) {
-                    await insertCompletion(editor, completion);
-                }
-            }
-        );
-    } catch (error) {
-        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
-    }
+    await prefetchAndTrigger(ctx, null, 'Generating completion...');
 }
 
 /**

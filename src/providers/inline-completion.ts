@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import { LLMProvider, DocumentType } from '../llm/types';
 import { analyzeDocument } from '../analysis/document-context';
-import { buildPrompt } from '../prompts/builder';
+import { buildPrompt, buildPromptForMode } from '../prompts/builder';
 import { resolveDocumentType } from '../prompts/type-detector';
 
 /**
@@ -25,6 +25,8 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
     private maxTokens: number;
     private cachedType: DocumentType | null = null;
     private cachedDocVersion: number = -1;
+    private forcedMode: 'structure' | 'content' | null = null;
+    private cachedCompletion: string | null = null;
 
     constructor(
         llm: LLMProvider,
@@ -64,6 +66,22 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
         this.cachedDocVersion = -1;
     }
 
+    /**
+     * Force a specific completion mode for the next completion request
+     * This is used by manual commands to override the auto-detected mode
+     */
+    setForcedMode(mode: 'structure' | 'content' | null): void {
+        this.forcedMode = mode;
+    }
+
+    /**
+     * Cache a pre-fetched completion to be returned instantly on the next
+     * provideInlineCompletionItems call, avoiding VS Code's cancellation timeout.
+     */
+    setCachedCompletion(completion: string | null): void {
+        this.cachedCompletion = completion;
+    }
+
     async provideInlineCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
@@ -78,12 +96,28 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
             return null;
         }
 
-        // In manual mode, only respond to explicit invocations (Ctrl+Space)
-        if (this.triggerMode === 'manual') {
+        // In manual mode, only respond to explicit invocations (Ctrl+Space) or forced mode
+        if (this.triggerMode === 'manual' && !this.forcedMode) {
             if (context.triggerKind === vscode.InlineCompletionTriggerKind.Automatic) {
                 console.log('[ThoughtCompletion] Manual mode - ignoring automatic trigger');
                 return null;
             }
+        }
+
+        // Return cached completion instantly (pre-fetched by manual commands)
+        if (this.cachedCompletion) {
+            const cached = this.cachedCompletion;
+            this.cachedCompletion = null;
+            this.forcedMode = null;
+            console.log('[ThoughtCompletion] Returning cached completion, length:', cached.length);
+
+            const snippetString = new vscode.SnippetString();
+            snippetString.appendText(cached);
+            const item = new vscode.InlineCompletionItem(
+                snippetString,
+                new vscode.Range(position, position)
+            );
+            return new vscode.InlineCompletionList([item]);
         }
 
         // In auto mode, still check we're not mid-word
@@ -126,8 +160,19 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
                 docType
             );
 
-            // Build prompt
-            const { systemPrompt, userPrompt } = buildPrompt(docContext);
+            // Build prompt using forced mode if set, otherwise use detected mode
+            let systemPrompt: string;
+            let userPrompt: string;
+            
+            if (this.forcedMode) {
+                ({ systemPrompt, userPrompt } = buildPromptForMode(docContext, this.forcedMode));
+                console.log('[ThoughtCompletion] Using forced mode:', this.forcedMode);
+                // Clear forced mode after using it once
+                this.forcedMode = null;
+            } else {
+                ({ systemPrompt, userPrompt } = buildPrompt(docContext));
+            }
+            
             console.log('[ThoughtCompletion] Built prompt, calling LLM...');
             console.log('[ThoughtCompletion] Cursor position:', docContext.cursorPosition);
             console.log('[ThoughtCompletion] Max tokens:', this.maxTokens);
@@ -139,15 +184,20 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
                 temperature: 0.7,
             });
 
-            console.log('[ThoughtCompletion] LLM response:', completion?.slice(0, 100));
+            console.log('[ThoughtCompletion] LLM response length:', completion?.length);
+            console.log('[ThoughtCompletion] LLM response lines:', completion?.split('\n').length);
+            console.log('[ThoughtCompletion] LLM response preview:', completion?.slice(0, 200));
 
             if (token.isCancellationRequested || !completion) {
                 return null;
             }
 
             // Create inline completion item
+            // Use SnippetString with appendText to avoid interpreting snippet syntax
+            const snippetString = new vscode.SnippetString();
+            snippetString.appendText(completion);
             const item = new vscode.InlineCompletionItem(
-                completion,
+                snippetString,
                 new vscode.Range(position, position)
             );
 
