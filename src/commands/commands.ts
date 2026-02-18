@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { LLMProvider, DocumentType } from '../llm/types';
 import { resolveDocumentType, getAllDocumentTypes } from '../prompts';
+import { buildPrompt, buildPromptForMode } from '../prompts/builder';
+import { analyzeDocument } from '../analysis/document-context';
 import { updateSetting } from '../config/settings';
 import { ThoughtCompletionProvider } from '../providers';
 
@@ -24,9 +26,14 @@ async function triggerInlineSuggestion(): Promise<void> {
 }
 
 /**
- * Continue Structure command - forces structure completion mode
+ * Pre-fetch a completion from the LLM with a progress notification,
+ * cache it on the provider, then trigger inline suggest.
  */
-export async function continueStructureCommand(ctx: CommandContext): Promise<void> {
+async function prefetchAndTrigger(
+    ctx: CommandContext,
+    mode: 'structure' | 'content' | null,
+    progressMessage: string
+): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
         vscode.window.showWarningMessage('No active editor');
@@ -34,35 +41,78 @@ export async function continueStructureCommand(ctx: CommandContext): Promise<voi
     }
 
     try {
-        // Set forced mode to structure
-        ctx.provider.setForcedMode('structure');
-        
-        // Trigger inline suggestion
-        await triggerInlineSuggestion();
+        const completion = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'ThoughtCompletion',
+                cancellable: true,
+            },
+            async (progress, token) => {
+                progress.report({ message: progressMessage });
+
+                const document = editor.document;
+                const position = editor.selection.active;
+                const text = document.getText();
+
+                // Resolve document type
+                const docType = await resolveDocumentType(
+                    text,
+                    ctx.activeTypeName,
+                    ctx.customTypes,
+                    ctx.llm
+                );
+
+                if (token.isCancellationRequested) { return null; }
+
+                // Analyze document context
+                const docContext = analyzeDocument(
+                    text,
+                    position.line,
+                    position.character,
+                    docType
+                );
+
+                // Build prompt
+                const { systemPrompt, userPrompt } = mode
+                    ? buildPromptForMode(docContext, mode)
+                    : buildPrompt(docContext);
+
+                if (token.isCancellationRequested) { return null; }
+
+                // Call LLM
+                return ctx.llm.complete(userPrompt, {
+                    systemPrompt,
+                    maxTokens: ctx.maxTokens,
+                    temperature: 0.7,
+                });
+            }
+        );
+
+        if (completion) {
+            ctx.provider.setCachedCompletion(completion);
+            // Also set forced mode as fallback
+            if (mode) {
+                ctx.provider.setForcedMode(mode);
+            }
+            await triggerInlineSuggestion();
+        }
     } catch (error) {
         vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
     }
 }
 
 /**
+ * Continue Structure command - forces structure completion mode
+ */
+export async function continueStructureCommand(ctx: CommandContext): Promise<void> {
+    await prefetchAndTrigger(ctx, 'structure', 'Generating structure completion...');
+}
+
+/**
  * Fill Blank command - forces content filling mode
  */
 export async function fillBlankCommand(ctx: CommandContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    try {
-        // Set forced mode to content
-        ctx.provider.setForcedMode('content');
-        
-        // Trigger inline suggestion
-        await triggerInlineSuggestion();
-    } catch (error) {
-        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
-    }
+    await prefetchAndTrigger(ctx, 'content', 'Generating content completion...');
 }
 
 /**
@@ -137,19 +187,7 @@ export async function selectTypeCommand(ctx: CommandContext): Promise<void> {
  * Trigger Completion command - auto-detects mode based on cursor position
  */
 export async function triggerCommand(ctx: CommandContext): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-    }
-
-    try {
-        // Don't set forced mode - let the provider auto-detect
-        // Just trigger inline suggestion
-        await triggerInlineSuggestion();
-    } catch (error) {
-        vscode.window.showErrorMessage(`ThoughtCompletion error: ${error}`);
-    }
+    await prefetchAndTrigger(ctx, null, 'Generating completion...');
 }
 
 /**

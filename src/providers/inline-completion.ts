@@ -26,6 +26,7 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
     private cachedType: DocumentType | null = null;
     private cachedDocVersion: number = -1;
     private forcedMode: 'structure' | 'content' | null = null;
+    private cachedCompletion: string | null = null;
 
     constructor(
         llm: LLMProvider,
@@ -73,6 +74,14 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
         this.forcedMode = mode;
     }
 
+    /**
+     * Cache a pre-fetched completion to be returned instantly on the next
+     * provideInlineCompletionItems call, avoiding VS Code's cancellation timeout.
+     */
+    setCachedCompletion(completion: string | null): void {
+        this.cachedCompletion = completion;
+    }
+
     async provideInlineCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
@@ -93,6 +102,22 @@ export class ThoughtCompletionProvider implements vscode.InlineCompletionItemPro
                 console.log('[ThoughtCompletion] Manual mode - ignoring automatic trigger');
                 return null;
             }
+        }
+
+        // Return cached completion instantly (pre-fetched by manual commands)
+        if (this.cachedCompletion) {
+            const cached = this.cachedCompletion;
+            this.cachedCompletion = null;
+            this.forcedMode = null;
+            console.log('[ThoughtCompletion] Returning cached completion, length:', cached.length);
+
+            const snippetString = new vscode.SnippetString();
+            snippetString.appendText(cached);
+            const item = new vscode.InlineCompletionItem(
+                snippetString,
+                new vscode.Range(position, position)
+            );
+            return new vscode.InlineCompletionList([item]);
         }
 
         // In auto mode, still check we're not mid-word
